@@ -8,7 +8,7 @@ Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın geti
 
 | # | Kavram | C'deki karşılığı |
 |---|---|---|
-| 1 | [class, public/private](01-class/NOT.md) | struct + `self` pointer'ı alan fonksiyonlar |
+| 1 | [class, public/private](01-class/NOT.md) | struct + nesnenin adresini (pointer) parametre alan fonksiyonlar |
 | 2 | constructor / destructor | `init()` / `deinit()` |
 | 3 | referans ve const | NULL olamayan pointer |
 | 4 | namespace | isim önekleri |
