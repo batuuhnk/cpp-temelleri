@@ -13,7 +13,7 @@ private:
 int main()
 {
     GpsSim gps;
-    gps._uydu_sayisi = -5;   // hata bekliyoruz
+    gps._uydu_sayisi = 200;   // hata bekliyoruz
     gps.yazdir();
     return 0;
 }

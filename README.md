@@ -2,7 +2,7 @@
 
 C biliyorum, C++ bilmiyordum. PX4 uçuş yazılımı C++ ile yazıldığı için ([PX4 çalışmalarım](https://github.com/batuuhnk/px4-sitl-learning)), PX4 kodunda karşıma çıkan C++ kavramlarını tek tek çalıştım.
 
-Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın getirdiği şeyin C'de neye karşılık geldiğini görebiliyorum. Her dersin sonunda o kavramın PX4 kodunda nerede geçtiğini de not aldım.
+Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın getirdiği şeyin C'de neye karşılık geldiğini görebiliyorum. İkisini STM32 (Cortex-M4) için derleyip assembly'lerini de karşılaştırdım: işlemci tarafında gerçekte ne değiştiğini görmek için. Her dersin sonunda o kavramın PX4 kodunda nerede geçtiğini de not aldım.
 
 ## Dersler
 
@@ -20,14 +20,21 @@ Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın geti
 
 ## Çalıştırma
 
-Her ders klasöründe `c_versiyon.c`, `cpp_versiyon.cpp` ve `NOT.md` var.
+Her ders klasöründe `c_versiyon.c`, `cpp_versiyon.cpp`, `NOT.md` ve assembly karşılaştırması için `asm/` var.
 
 ```bash
 ./calistir.sh 01-class/c_versiyon.c
 ./calistir.sh 01-class/cpp_versiyon.cpp
 ```
 
-`calistir.sh` bilgisayarda g++ varsa onu, yoksa PX4'ün derleme container'ındaki g++'ı kullanıyor. Doğrudan derlemek için:
+STM32 (Cortex-M4) assembly'sini görmek için:
+
+```bash
+./asm.sh 01-class/asm/gps_c.c
+./asm.sh 01-class/asm/gps_cpp.cpp
+```
+
+`calistir.sh` bilgisayarda g++ varsa onu, yoksa PX4'ün derleme container'ındaki g++'ı kullanıyor. `asm.sh` aynı container'daki `arm-none-eabi-gcc`'yi kullanıyor (Pixhawk firmware'ini derleyen derleyici). Doğrudan derlemek için:
 
 ```bash
 g++ -Wall -std=c++17 01-class/cpp_versiyon.cpp -o prog && ./prog
