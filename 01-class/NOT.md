@@ -13,7 +13,7 @@ Basit bir GPS simülatörü:
 
 Enlem ve boylamı `double` yerine `int32_t` olarak, derece × 10⁷ şeklinde tutuyorum. Gerçek GPS modülleri de (örneğin u-blox) konumu böyle gönderiyor: 47.3977420° → `473977420`.
 
-## 1. C ile
+## C ile
 
 Dosya: `c_versiyon.c`
 
@@ -91,13 +91,17 @@ lat=47.3977420 lon=8.5455940 uydu=12
 lat=47.3977420 lon=8.5455940 uydu=200
 ```
 
-- 3. satır: ilk güncelleme yapıldı.
-- 4. satır: GPS engelliyken güncelleme denendi, konum değişmedi.
-- 5. satır: `gps.uydu_sayisi = 200;` satırı struct'ın içine doğrudan yazdı. C'de bunu engelleyen bir şey yok; `gps_guncelle`'deki "engelliyse kabul etme" kontrolü de atlanmış oldu.
+| Çıktı | Hangi koddan geliyor | Anlamı |
+|---|---|---|
+| `gps nesnesinin adresi: 0x7ffe...` | `printf(... &gps)` | Struct'ın bellekteki adresi |
+| `alanlarin konumu: lat +0, ...` | `offsetof` satırları | Her alanın struct'ın başından kaç byte ileride olduğu (aşağıda *Struct bellekte nasıl duruyor?*) |
+| `lat=47.3977420 ... uydu=12` | ilk `gps_guncelle` | Konum güncellendi |
+| `lat=47.3977420 ... uydu=12` (aynı) | `gps_engelle(&gps, true)` sonrası `gps_guncelle` | GPS engelliyken güncelleme kabul edilmedi, konum değişmedi |
+| `lat=47.3977420 ... uydu=200` | `gps.uydu_sayisi = 200;` | Struct'ın içine dışarıdan doğrudan yazıldı. C'de bunu engelleyen bir şey yok; `gps_guncelle`'deki "engelliyse kabul etme" kontrolü de atlanmış oldu |
 
-## 2. Struct bellekte nasıl duruyor?
+## Struct bellekte nasıl duruyor?
 
-Çıktının 2. satırı struct'ın yerleşimini veriyor: `lat +0, lon +4, uydu_sayisi +8, engelli +9, toplam 12 byte`.
+C programının çıktısındaki `alanlarin konumu: lat +0, lon +4, uydu_sayisi +8, engelli +9, toplam 12 byte` satırı struct'ın yerleşimini veriyor.
 
 Struct, bellekte art arda duran byte'lardan ibaret. Her alanın struct'ın başına göre sabit bir uzaklığı var. Nesne STM32'de RAM'in `0x20000100` adresinde olsaydı:
 
@@ -112,13 +116,13 @@ adres        alan            uzaklık
 
 Alan isimleri sadece kaynak kodda var. Derleyici `engelli` gördüğünde onu "nesnenin adresi + 9" diye çeviriyor; işlemci sadece adres görüyor.
 
-## 3. `p` nedir?
+## `p` nedir?
 
 `gps_guncelle(GpsSim *p, ...)` içindeki `p` özel bir kelime değil, sadece parametrenin adı (`gps`, `ptr`, `self` de denebilirdi). Çağırırken `&gps` veriyorum, yani `p`'nin içinde nesnenin adresi var; örnekte `0x20000100`.
 
 `p->engelli` demek "p'deki adrese git, 9 byte ileriye bak" demek. `p->lat = lat` demek "p'deki adrese lat'ı yaz" demek.
 
-## 4. İşlemci bu çağrıda ne yapıyor?
+## İşlemci bu çağrıda ne yapıyor?
 
 İşlemcinin içinde register denen birkaç hızlı saklama yeri var. İşlemci hesap yaparken veriyi önce register'a alıyor, işini yapıyor, sonucu belleğe yazıyor. ARM'da (STM32) bir fonksiyonun ilk 4 parametresi sırayla ilk 4 register'a konuyor.
 
@@ -139,7 +143,7 @@ Toplam 15 tick civarı. Pixhawk 6X'teki gibi 480 MHz'lik bir STM32H7'de bu 0.03 
 
 Lat, lon ve uydu ara bir yere kopyalanmıyor; register'da hazır duran değer doğrudan nesnenin içindeki yerine yazılıyor. Her alan için tek bir yazma işlemi var.
 
-## 5. C++ ile
+## C++ ile
 
 Dosya: `cpp_versiyon.cpp`
 
@@ -207,10 +211,10 @@ C sürümünden farkları:
 - Veri (`_lat`, `_lon`, ...) ve fonksiyonlar (`guncelle`, `engelle`, `yazdir`) aynı `class GpsSim { ... };` bloğunun içinde.
 - Fonksiyonlarda `GpsSim *p` parametresi yok. Fonksiyonun içinde alanlara `p->lat` yerine doğrudan `_lat` diye erişiliyor.
 - Çağırırken `gps_guncelle(&gps, ...)` yerine `gps.guncelle(...)` yazılıyor.
-- Alanlar `private:` altında, fonksiyonlar `public:` altında (7. bölüm).
-- Alanların başlangıç değeri tanımın yanında veriliyor (`int32_t _lat = 0;`). Bunu 2. derste ayrıntılı göreceğim.
+- Alanlar `private:` altında, fonksiyonlar `public:` altında (aşağıda *public ve private*).
+- Alanların başlangıç değeri tanımın yanında veriliyor (`int32_t _lat = 0;`). Bunu 2. derste (constructor) ayrıntılı göreceğim.
 - Değişken isimleri `_` ile başlıyor. Bu C++'ın bir kuralı değil, PX4'ün yazım alışkanlığı: üye değişkenleri yerel değişkenlerden ayırmak için.
-- C sürümündeki "dışarıdan 200 yazma" satırı yok, çünkü C++'ta derlenmiyor (7. bölüm).
+- C sürümündeki `gps.uydu_sayisi = 200;` kodu burada yok, çünkü C++'ta derlenmiyor (aşağıda *public ve private*).
 
 Çıktı (`./calistir.sh 01-class/cpp_versiyon.cpp`):
 
@@ -222,26 +226,30 @@ lat=47.3977420 lon=8.5455940 uydu=12
 lat=47.3977420 lon=8.5455940 uydu=12
 ```
 
-- 1. ve 2. satır aynı sayı: `this`, nesnenin adresi (6. bölüm).
-- Boyut C ile aynı, 12 byte.
-- Son iki satır C ile aynı davranış: engelliyken güncelleme kabul edilmedi.
+| Çıktı | Hangi koddan geliyor | Anlamı |
+|---|---|---|
+| `gps nesnesinin adresi: 0x7ffeccae0d6c` | `main`'de `printf(... &gps)` | Nesnenin bellekteki adresi |
+| `this = 0x7ffeccae0d6c` | `gps.this_yazdir()` | Fonksiyonun içindeki `this`. Bir üstteki adresle aynı sayı (aşağıda *this*) |
+| `toplam 12 byte` | `sizeof(GpsSim)` | C'deki struct ile aynı boyut |
+| `lat=47.3977420 ... uydu=12` | ilk `gps.guncelle` | Konum güncellendi |
+| `lat=47.3977420 ... uydu=12` (aynı) | `gps.engelle(true)` sonrası `gps.guncelle` | Engelliyken güncelleme kabul edilmedi, C ile aynı davranış |
 
 (Adresler bilgisayardaki stack'ten geliyor ve her çalıştırmada değişiyor; STM32'de `0x2000....` gibi bir RAM adresi olurdu.)
 
-## 6. `this`
+## `this`
 
 C++'ta parametre listesinde nesnenin adresi yazmıyor, ama derleyici onu **gizlice ilk parametre olarak ekliyor**. Bu gizli parametrenin adı `this`:
 
 - `gps.guncelle(473977420, 85455940, 12)` çağrısı, derleyici için `guncelle(&gps, 473977420, 85455940, 12)` demek.
 - Fonksiyonun içindeki `_engelli`, derleyici için `this->_engelli` demek. C'deki `p->engelli` ile aynı; `p` yerine `this` var ve yazmak zorunda değilim. `engelle()` fonksiyonunda `this->_engelli` diye açıkça da yazdım, ikisi aynı şey.
 
-Çıktıdaki ilk iki satır bunu gösteriyor: `main`'de yazdırılan `&gps` ile fonksiyonun içinde yazdırılan `this` aynı sayı.
+C++ programının çıktısındaki `gps nesnesinin adresi: 0x7ffeccae0d6c` ve `this = 0x7ffeccae0d6c` bunu gösteriyor: `main`'de yazdırılan `&gps` ile fonksiyonun içinde yazdırılan `this` aynı sayı.
 
-Bu yüzden 4. bölümdeki tablo C++ için de aynen geçerli: adres 1. register'a gidiyor, `_engelli` adres + 9'dan okunuyor, alanlar aynı adreslere yazılıyor. **C++'ın class'ı ekstra tick harcamıyor.** İkisini STM32 için derleyip karşılaştırdım; işlemciye giden komutlar birebir aynı çıktı.
+Bu yüzden yukarıdaki *İşlemci bu çağrıda ne yapıyor?* tablosu C++ için de aynen geçerli: adres 1. register'a gidiyor, `_engelli` adres + 9'dan okunuyor, alanlar aynı adreslere yazılıyor. **C++'ın class'ı ekstra tick harcamıyor.** İkisini STM32 için derleyip karşılaştırdım; işlemciye giden komutlar birebir aynı çıktı.
 
-C++'ın gerçekten ekstra tick harcadığı bir yeri ileride göreceğim: `virtual` fonksiyonlar (6. ders). Orada fonksiyonun adresini bulmak için bellekten bir okuma daha yapılıyor.
+C++'ın gerçekten ekstra tick harcadığı bir yeri 6. derste (virtual) göreceğim. Orada fonksiyonun adresini bulmak için bellekten bir okuma daha yapılıyor.
 
-## 7. public ve private
+## public ve private
 
 - `public:` altındakiler dışarıdan çağrılabiliyor.
 - `private:` altındakilere sadece class'ın kendi fonksiyonları erişebiliyor.
@@ -270,7 +278,7 @@ int main()
 }
 ```
 
-Derleyici çıktısı (program hiç oluşmuyor):
+Derleyici çıktısı (program hiç oluşmuyor; `16:9`, dosyanın 16. satırının 9. karakteri demek):
 
 ```
 hata_ornegi.cpp:16:9: error: 'int GpsSim::_uydu_sayisi' is private within this context
@@ -281,11 +289,11 @@ Yani GPS verisi sadece `guncelle()` üzerinden değişebiliyor, ve `guncelle()` 
 
 Bu kontrol **sadece derleme sırasında** yapılıyor. Program çalışırken işlemci için public ya da private diye bir şey yok; ikisi de "adres + uzaklık". Private hiç tick harcamıyor, sadece yanlış kodun derlenmesini engelliyor.
 
-## 8. const fonksiyon
+## const fonksiyon
 
 `void yazdir() const` sonundaki `const`, bu fonksiyonun üye değişkenleri değiştirmeyeceği anlamına geliyor. C'deki `void gps_yazdir(const GpsSim *p)` ile aynı şey: `yazdir()` içinde `_lat = 0;` yazsaydım derleme hatası alırdım. Bu da sadece derleme sırasında kontrol ediliyor.
 
-## 9. Boyut
+## Boyut
 
 İkisi de 12 byte. Fonksiyonlar nesnenin içinde saklanmıyor; flash'ta tek kopya olarak duruyorlar ve hangi nesne üzerinde çalışacaklarını kendilerine verilen adresten (`p` ya da `this`) öğreniyorlar. Class'a fonksiyon eklemek RAM'de yer kaplamıyor. Aynı class'tan 10 nesne oluşturursam RAM'de 10 × 12 byte yer tutuyor, fonksiyonlar flash'ta yine tek kopya.
 
@@ -309,4 +317,4 @@ private:
 
 - `public` kısmında dışarıdan çağrılanlar var (`init()`), `private` kısmında iç işler ve `_` ile başlayan üye değişkenler.
 - Work queue bu modülün `Run()` fonksiyonunu çağırırken arka planda olan şey bu derstekiyle aynı: nesnenin adresi `this` olarak veriliyor, `Run()` içindeki her `_` ile başlayan değişken "this + uzaklık" adresinden okunuyor.
-- Henüz görmediğim kısımlar: `: public ...` kalıtım (5. ders), `override` (6. ders), `<sensor_gps_s>` template (7. ders), `SensorGpsSim();` constructor (2. ders).
+- Henüz görmediğim kısımlar: `SensorGpsSim();` (2. ders: constructor), `: public ...` (5. ders: kalıtım), `override` (6. ders: virtual), `<sensor_gps_s>` (7. ders: template).
