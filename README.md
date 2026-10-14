@@ -10,7 +10,7 @@ Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın geti
 |---|---|---|
 | 1 | [class, public/private](01-class/NOT.md) | struct + nesnenin adresini (pointer) parametre alan fonksiyonlar |
 | 2 | [constructor / destructor](02-constructor/NOT.md) | `init()` / `deinit()`, `malloc` + init / deinit + `free` |
-| 3 | referans ve const | NULL olamayan pointer |
+| 3 | [referans ve const](03-referans-const/NOT.md) | NULL olamayan pointer, `const` pointer |
 | 4 | namespace | isim önekleri |
 | 5 | kalıtım | base struct'ı gömmek |
 | 6 | virtual / override | fonksiyon pointer'ı |
