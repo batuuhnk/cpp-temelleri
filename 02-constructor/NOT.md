@@ -249,6 +249,92 @@ heap ornegi bitti, acik GPS sayisi = 0
 - Tanımda başlangıç değeri olan alanlar (`_lat{0}` gibi) da constructor'ın başında yazılıyor.
 - Constructor bir parametre istiyorsa, nesneyi parametresiz oluşturmak mümkün değil. Bu, C'deki "init'i unutmak" hatasını derleme aşamasında engelliyor (aşağıda *Hata örneği*).
 
+## Başlangıç listesine her alanı yazmak gerekiyor mu?
+
+Hayır. Listeye sadece constructor'a dışarıdan gelen değeri yazmak yetiyor; geri kalan alanlar tanımlandıkları yerdeki değeri kendiliğinden alıyor. Bunu ayrı bir örnekle denedim: `baslangic_listesi.cpp`
+
+```cpp
+// Başlangıç listesine her alanı yazmak gerekiyor mu?
+#include <cstdio>
+#include <cstdint>
+
+class GpsSim
+{
+public:
+    // Sadece dışarıdan gelen değer listede. Diğer alanlar tanımdaki değeri alıyor.
+    GpsSim(uint8_t guncelleme_hizi) : _hz(guncelleme_hizi) {}
+
+    // Aynı sonuç, liste yerine gövdede atama ile
+    GpsSim(uint8_t hz, int32_t lat) { _hz = hz; _lat = lat; }
+
+    void yazdir() const
+    {
+        printf("lat=%d lon=%d uydu=%d hz=%d engelli=%d\n", (int)_lat, (int)_lon, _uydu_sayisi, _hz, _engelli);
+    }
+
+private:
+    int32_t _lat{0};
+    int32_t _lon{0};
+    uint8_t _uydu_sayisi{0};
+    uint8_t _hz{1};          // varsayılan 1 Hz; constructor isterse değiştiriyor
+    bool    _engelli{false};
+};
+
+class SiraOrnegi
+{
+public:
+    SiraOrnegi() : _b(1), _a(_b + 1) {}   // listede önce _b yazdım ama class'ta önce _a tanımlı
+
+private:
+    int _a;
+    int _b;
+};
+
+int main()
+{
+    GpsSim a(8);
+    GpsSim b(5, 473977420);
+    a.yazdir();
+    b.yazdir();
+    return 0;
+}
+```
+
+Çıktı (`./calistir.sh 02-constructor/baslangic_listesi.cpp`):
+
+```
+lat=0 lon=0 uydu=0 hz=8 engelli=0
+lat=473977420 lon=0 uydu=0 hz=5 engelli=0
+```
+
+| Çıktı | Hangi koddan geliyor | Anlamı |
+|---|---|---|
+| `lat=0 lon=0 uydu=0 hz=8 engelli=0` | `GpsSim a(8);`, listede sadece `_hz` var | `_hz` listeden 8 aldı (tanımdaki 1 kullanılmadı), diğer alanlar tanımdaki değerleri aldı |
+| `lat=473977420 lon=0 uydu=0 hz=5 engelli=0` | `GpsSim b(5, 473977420);`, liste yok, gövdede atama var | Gövdede `_hz = hz; _lat = lat;` yazmak da aynı sonucu verdi |
+
+Yani iki yer var ve görevleri farklı:
+
+- **Tanımdaki değer** (`_lat{0}`): sabit varsayılan değerler için. Bir kez yazılıyor, bütün constructor'lar kullanıyor.
+- **Başlangıç listesi** (`: _hz(guncelleme_hizi)`): nesne oluşturulurken dışarıdan verilen değerler için.
+
+PX4 de böyle yapıyor: `SensorGpsSim`'in alanları tanımda başlangıç değerini alıyor (`_loop_perf{perf_alloc(...)}` gibi), listede ise sadece miras alınan class'lar var (aşağıda *PX4'te*).
+
+Ayrıntılar:
+
+- **İsimlerin aynı olması gerekmiyor.** `_hz(hz)` sadece bir alışkanlık; örnekte `_hz(guncelleme_hizi)` yazdım. Parantezin içine bir ifade de yazılabiliyor, örneğin `_hz(hz > 10 ? 10 : hz)`.
+- **Gövdede atama da çalışıyor**, ama liste tercih ediliyor. `int` gibi basit tiplerde aralarında tick farkı yok. Fakat `const` alanlar ve miras alınan class'lar sadece listede başlatılabiliyor; gövdeye gelindiğinde onlar çoktan oluşmuş oluyor. Karmaşık tiplerde de gövdede atama "önce varsayılan değerle oluştur, sonra üstüne yaz" demek, yani iş iki kez yapılıyor.
+- **Hiçbir yerde değer verilmeyen alan çöp kalıyor.** `_hz`'nin tanımında `{1}` olmasaydı ve constructor da ona değer vermeseydi, C'deki gibi o bellek adresinde ne kaldıysa o olurdu.
+
+**Dikkat: alanlar listedeki yazılış sırasıyla değil, class'ta tanımlandıkları sırayla başlatılıyor.** Örnekteki `SiraOrnegi`'de listeye önce `_b`, sonra `_a` yazdım. Ama class'ta önce `_a` tanımlı (bellekte `_a` +0, `_b` +4), bu yüzden önce `_a = _b + 1` çalışıyor ve `_b` o sırada henüz çöp. Derleyici bunun için uyardı:
+
+```
+warning: 'SiraOrnegi::_b' will be initialized after [-Wreorder]
+warning:   'int SiraOrnegi::_a' [-Wreorder]
+warning: member 'SiraOrnegi::_b' is used uninitialized [-Wuninitialized]
+```
+
+İlk iki satır "listede yazdığın sıra ile gerçek sıra farklı", son satır "`_b`'yi değer verilmeden önce kullanıyorsun" diyor. Kural: listeyi class'taki tanım sırasıyla yazmak.
+
 ## Destructor
 
 - Nesnenin ömrü bittiği anda çağrılıyor:
