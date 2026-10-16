@@ -13,7 +13,7 @@ Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın geti
 | 3 | [referans ve const](03-referans-const/NOT.md) | NULL olamayan pointer, `const` pointer |
 | 4 | [namespace](04-namespace/NOT.md) | isimlere modül öneki koymak (`gps_guncelle`) |
 | 5 | [kalıtım](05-kalitim/NOT.md) | ortak struct'ı diğer struct'ların ilk alanı olarak gömmek |
-| 6 | virtual / override | fonksiyon pointer'ı |
+| 6 | [virtual / override](06-virtual/NOT.md) | fonksiyon pointer tablosu (`w->tablo->run(w)`) |
 | 7 | template | makroyla kod üretmek |
 | 8 | küçük yardımcılar | enum class, constexpr, static_cast, nullptr |
 | 9 | bitirme: minik publish/subscribe sistemi | |
