@@ -14,7 +14,7 @@ Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın geti
 | 4 | [namespace](04-namespace/NOT.md) | isimlere modül öneki koymak (`gps_guncelle`) |
 | 5 | [kalıtım](05-kalitim/NOT.md) | ortak struct'ı diğer struct'ların ilk alanı olarak gömmek |
 | 6 | [virtual / override](06-virtual/NOT.md) | fonksiyon pointer tablosu (`w->tablo->run(w)`) |
-| 7 | template | makroyla kod üretmek |
+| 7 | [template](07-template/NOT.md) | `void*` ile tipten bağımsız kod ya da makroyla her tip için kod üretmek |
 | 8 | küçük yardımcılar | enum class, constexpr, static_cast, nullptr |
 | 9 | bitirme: minik publish/subscribe sistemi | |
 
