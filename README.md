@@ -15,7 +15,7 @@ Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın geti
 | 5 | [kalıtım](05-kalitim/NOT.md) | ortak struct'ı diğer struct'ların ilk alanı olarak gömmek |
 | 6 | [virtual / override](06-virtual/NOT.md) | fonksiyon pointer tablosu (`w->tablo->run(w)`) |
 | 7 | [template](07-template/NOT.md) | `void*` ile tipten bağımsız kod ya da makroyla her tip için kod üretmek |
-| 8 | küçük yardımcılar | enum class, constexpr, static_cast, nullptr |
+| 8 | [küçük yardımcılar](08-kucuk-yardimcilar/NOT.md) | `enum`, `#define`, C tarzı cast, `NULL` yerine: enum class, constexpr, `_ms`, static_cast, nullptr |
 | 9 | bitirme: minik publish/subscribe sistemi | |
 
 ## Çalıştırma
