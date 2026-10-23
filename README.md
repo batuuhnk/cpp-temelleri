@@ -16,11 +16,11 @@ Her derste aynı şeyi önce C ile, sonra C++ ile yazdım. Böylece C++'ın geti
 | 6 | [virtual / override](06-virtual/NOT.md) | fonksiyon pointer tablosu (`w->tablo->run(w)`) |
 | 7 | [template](07-template/NOT.md) | `void*` ile tipten bağımsız kod ya da makroyla her tip için kod üretmek |
 | 8 | [küçük yardımcılar](08-kucuk-yardimcilar/NOT.md) | `enum`, `#define`, C tarzı cast, `NULL` yerine: enum class, constexpr, `_ms`, static_cast, nullptr |
-| 9 | bitirme: minik publish/subscribe sistemi | |
+| 9 | [bitirme: mini PX4](09-bitirme/NOT.md) | 1–8'in hepsi: work queue, virtual Run(), template'li topic'ler, GPS kaybı |
 
 ## Çalıştırma
 
-Her ders klasöründe `c_versiyon.c`, `cpp_versiyon.cpp`, ve `NOT.md` var.
+Her ders klasöründe `c_versiyon.c`, `cpp_versiyon.cpp` ve `NOT.md` var (bitirme dersinde sadece `mini_px4.cpp`).
 
 ```bash
 ./calistir.sh 01-class/c_versiyon.c
