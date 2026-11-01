@@ -226,7 +226,15 @@ C tarzı cast her şeye izin veriyordu: C sürümünde `(GpsVeri *)&baro` ile ba
 
 `static_cast<int>(param1 + 0.5f)`: 3.9 + 0.5 = 4.4, tam sayıya çevrilince 4 (çıktıdaki `birim=4`). Ondalıklı bir sayıyı en yakın tam sayıya yuvarlamanın kısa yolu.
 
-İşlemci için: float'tan int'e çevirmek STM32'nin FPU'sunda tek bir komut (~1 tick); C tarzı cast'le aynı. Pointer çevirmek 0 tick, adres değişmiyor. Yani `static_cast` ek tick getirmiyor, sadece derleme sırasında kontrol ekliyor.
+İşlemci için: tick'i harcayan cast'in yazılışı değil, çevirmenin kendisi. `(int)f` ile `static_cast<int>(f)` derlenince aynı makine komutu çıkıyor; `static_cast`'in tek farkı derleme sırasında yaptığı kontrol.
+
+| Çevirme | İşlemcide ne oluyor | Maliyet |
+|---|---|---|
+| float → int, FPU'lu STM32 (Cortex-M4F) | tek bir `VCVT` komutu | ~1 tick |
+| float → int, FPU'suz STM32 (Cortex-M0/M3) | kütüphane fonksiyonu çağrılıyor (`__aeabi_f2iz`) | ~20–60 tick |
+| pointer → pointer | komut yok; adres aynı, sadece tip değişiyor | 0 tick |
+
+Maliyet iki yazımda da aynı. C tarzı cast C++'ta da derleniyor, ama her çevirmeye izin verdiği için (yukarıdaki barometre örneği) MISRA C++ gibi kurallar `static_cast` istiyor.
 
 ## nullptr
 
