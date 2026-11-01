@@ -2,27 +2,149 @@
 
 İlk 8 derste öğrendiklerimi tek bir programda birleştirdim: PX4'ün çekirdek fikrinin düz C++ ile yazılmış oyuncak hali. İçinde bir work queue, `virtual Run()` ile çalışan modüller, template'li topic'ler, periyodik çalışan ve bir topic'e veri gelince uyanan modüller var. Bunlarla PX4 çalışmamdaki GPS kaybı deneyini küçük ölçekte yeniden yaptım.
 
-Bu derste C sürümü yok; her parçanın C karşılığı ilgili derste. Kodun tamamı bu notun içinde.
+Bu derste C sürümü yok; her parçanın C karşılığı ilgili derste. Kod `mini_px4.cpp` dosyasında; her C++ satırının ne yaptığı yanında yorum olarak yazılı.
 
-## Program ne yapıyor?
+## Büyük resim
 
-Üç modül, bir work queue ve iki topic var:
+Üç modül, bir work queue ve iki topic var. Modüller birbirini hiç çağırmıyor; sadece topic'lere yazıp okuyorlar. Work queue da hangisinin ne olduğunu bilmeden her birinin `Run()`'ını çağırıyor.
 
+```mermaid
+flowchart LR
+    WQ["WorkQueue<br/>her 4 ms bir adım"]
+    GS["GpsSim<br/>her 125 ms"]
+    EK["Ekf<br/>her 50 ms"]
+    GM["GpsMonitor<br/>olayla uyanır"]
+    T1[("gps_topic<br/>Topic&lt;GpsVeri&gt;")]
+    T2[("estimator_topic<br/>Topic&lt;EstimatorDurum&gt;")]
+    WQ -. "Run()" .-> GS
+    WQ -. "Run()" .-> EK
+    WQ -. "Run()" .-> GM
+    GS -- "publish" --> T1
+    T1 -- "update" --> EK
+    EK -- "publish" --> T2
+    T2 -- "update" --> GM
+    T2 == "ScheduleNow()<br/>uyandır" ==> GM
 ```
-gps_sim  (her 125 ms)  ──gps_topic──►  ekf  (her 50 ms)  ──estimator_topic──►  gps_monitor  (olayla)
-                                                                                 durum değişince yazar
+
+| Modül | Ne zaman çalışıyor | Ne yapıyor | PX4'teki karşılığı |
+|---|---|---|---|
+| **gps_sim** | her 125 ms | `gps_topic`'e konum yayınlıyor; "engelli" iken yayını kesiyor | `sensor_gps_sim`, `failure gps off` |
+| **ekf** | her 50 ms | yeni GPS varsa zamanını alıyor; 1 s'dir GPS yoksa "kayıp" diyor; sonucu `estimator_topic`'e yazıyor | EKF2'nin `cs_gnss_pos` bayrağı |
+| **gps_monitor** | `estimator_topic`'e her yayında (olayla) | GPS durumu değiştiyse ekrana yazıyor | callback'li bir uORB aboneliği |
+| **work queue** | sürekli, 4 ms adımlarla (250 Hz) | saati ilerletip her modüle "zamanın geldiyse ya da uyandırıldıysan çalış" diyor | `wq:` thread'leri |
+
+`main` 2 saniye normal çalıştırıyor, sonra GPS'i kesip 3 saniye, sonra GPS'i geri açıp 1 saniye daha çalıştırıyor. En sonda work queue'nun durumunu yazdırıyor.
+
+## Sınıflar arası ilişki
+
+```mermaid
+classDiagram
+    class WorkItem {
+        <<abstract>>
+        #_ad
+        -_periyot
+        -_bekliyor
+        +Run()* void
+        +ScheduleOnInterval(periyot)
+        +ScheduleNow()
+        +gerekirse_calistir()
+    }
+    class GpsSim {
+        -_gps_pub : Publication~GpsVeri~
+        +Run() void
+        +engelle(bool)
+    }
+    class Ekf {
+        -_gps_sub : Subscription~GpsVeri~
+        -_durum_pub : Publication~EstimatorDurum~
+        +Run() void
+    }
+    class GpsMonitor {
+        -_durum_sub : Subscription~EstimatorDurum~
+        +Run() void
+    }
+    class Topic~T~ {
+        -_veri : T
+        -_sayac
+        -_aboneler : WorkItem*[4]
+        +yayinla(const T&)
+    }
+    class WorkQueue {
+        -_isler : WorkItem*[8]
+        +calistir(sure)
+    }
+    WorkItem <|-- GpsSim
+    WorkItem <|-- Ekf
+    WorkItem <|-- GpsMonitor
+    WorkQueue o-- WorkItem : WorkItem* tutar
+    Topic~T~ o-- WorkItem : callback aboneleri
 ```
 
-- **gps_sim**: Her 125 ms'de `gps_topic`'e bir konum yayınlıyor. "Engelli" yapılınca yayını kesiyor; PX4'teki `sensor_gps_sim stop`'un ya da `failure gps off`'un karşılığı.
-- **ekf**: Her 50 ms'de çalışıyor. `gps_topic`'te yeni veri varsa son GPS zamanını güncelliyor. 1 saniyedir yeni GPS gelmediyse GPS'i "kayıp" sayıyor. Sonucu her seferinde `estimator_topic`'e yayınlıyor. PX4'teki EKF2'nin `cs_gnss_pos` bayrağının basit hali.
-- **gps_monitor**: Periyodik değil. `estimator_topic`'e her yayın yapıldığında uyanıyor; GPS durumu değişmişse ekrana yazıyor.
-- **Work queue**: Simülasyon saatini 4 ms'lik adımlarla (250 Hz) ilerletiyor ve her adımda modüllere "zamanın geldiyse ya da biri seni uyandırdıysa çalış" diyor.
+- **Kalıtım (5. ders):** `GpsSim`, `Ekf`, `GpsMonitor` birer `WorkItem`. Zamanlama kodunu (`ScheduleOnInterval`, `ScheduleNow`, `gerekirse_calistir`) yeniden yazmıyorlar, devralıyorlar.
+- **virtual (6. ders):** `Run()` WorkItem'da `= 0`; her modül kendi `Run()`'ını yazmak zorunda. Work queue sadece `WorkItem*` tutuyor ama çağrı gerçek modüle gidiyor.
+- **template (7. ders):** `Topic<T>`, `Publication<T>`, `Subscription<T>` bir kez yazıldı; derleyici `GpsVeri` ve `EstimatorDurum` için ayrı ayrı üretti. Yanlış tipi yayınlamak derlenmiyor.
 
-`main` 2 saniye normal çalıştırıyor, sonra GPS'i kesip 3 saniye çalıştırıyor, sonra GPS'i geri açıp 1 saniye daha çalıştırıyor. En sonda work queue'nun durumunu yazdırıyor.
+## Kodu parça parça okumak
 
-## Kod
+Tamamı aşağıda *Kodun tamamı* bölümünde. Önce altı parçaya bakmak okumayı kolaylaştırıyor.
+
+**1. Zaman (8. ders):** `125_ms` yazınca derleyici `operator ""_ms`'i çalıştırıp yerine 125000 koyuyor.
+
+```cpp
+using zaman_us = uint64_t;                                          // typedef uint64_t zaman_us;
+constexpr zaman_us operator ""_ms(unsigned long long ms) { return ms * 1000; }
+```
+
+**2. WorkItem (1, 2, 5, 6. ders):** Her modülün temeli. Zamanı geldiyse veya uyandırıldıysa `Run()`'ı çağırıyor.
+
+```cpp
+class WorkItem {
+public:
+    WorkItem(const char *ad) : _ad(ad) {}     // constructor + initializer list
+    virtual void Run() = 0;                   // her modül kendi Run'ını yazmak zorunda
+    void ScheduleNow() { _bekliyor = true; }  // "beni bir sonraki adımda çalıştır"
+    // ...
+};
+```
+
+**3. Topic / Publication / Subscription (3, 7. ders):** Yayıncı ve okuyucu birbirini tanımıyor; ikisi de aynı topic'e referansla bağlı. Okuyucu, topic'in sayacı kendi okuduğundan farklıysa yeni veri olduğunu anlıyor.
+
+```cpp
+template<typename T>
+class Topic {
+    void yayinla(const T &v) { _veri = v; _sayac++; /* callback'li aboneleri ScheduleNow() ile uyandır */ }
+};
+bool update(T *hedef) { if (!updated()) return false; *hedef = _topic.veri(); _okunan = _topic.sayac(); return true; }
+```
+
+**4. WorkQueue:** Saati 4 ms ilerletip sıradaki her işe bakıyor.
+
+```cpp
+while (simdi < bitis) {
+    simdi += 4_ms;
+    for (int i = 0; i < _sayi; i++) { _isler[i]->gerekirse_calistir(); }
+}
+```
+
+**5. Modüller:** Constructor'da kendini zamanlıyor, `Run()`'da işini yapıyor.
+
+```cpp
+class Ekf : public WorkItem {
+    Ekf() : WorkItem("ekf") { ScheduleOnInterval(50_ms); }
+    void Run() override { /* yeni GPS varsa zamanı al, 1 s aşıldıysa Kayip, durumu yayınla */ }
+    static constexpr zaman_us GPS_ZAMAN_ASIMI = 1_s;
+};
+Subscription<EstimatorDurum> _durum_sub{estimator_topic, this};   // GpsMonitor: "yayın gelince beni uyandır"
+```
+
+**6. main:** Nesneleri oluşturuyor (constructor'lar çalışıyor), work queue'ya ekliyor, senaryoyu oynatıyor. `return 0` ile destructor'lar çalışıyor.
+
+## Kodun tamamı
 
 Dosya: `mini_px4.cpp`
+
+<details>
+<summary>Açmak için tıkla (yorumlu, 355 satır)</summary>
 
 ```cpp
 // 9. ders, bitirme: PX4'ün çekirdek fikrinin oyuncak hali.
@@ -382,6 +504,8 @@ int main()
 }
 ```
 
+</details>
+
 ## Çıktı
 
 `./calistir.sh 09-bitirme/mini_px4.cpp`:
@@ -413,6 +537,17 @@ program bitiyor:
 | `gps_monitor olay ile 120 calisma` | EKF'nin her yayını onu bir kez uyandırdı: 120. Ama sadece 3 kez yazdı, çünkü sadece 3 kez durum değişti |
 | `gps_sim kapandi` | `main` biterken GpsSim'in destructor'ı çalıştı |
 
+Aynı çalışmanın zaman çizgisi (1 karakter = 0,1 s; █ GPS yayını var, ░ yok, b = bekleniyor, ▲ gps_monitor ekrana yazdı):
+
+```
+zaman (s)    0                   2          3.05               5         6
+             |                   |          |                  |         |
+GPS yayını   ░░███████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█████████
+EKF durumu   b kullaniliyor                 KAYIP                kullaniliyor
+                                 └── 1 s ──┘
+gps_monitor    ▲                            ▲                    ▲
+```
+
 PX4 çalışmamdaki gerçek deneyde EKF2'nin GPS'i bırakması 7.9 saniye sürmüştü; orada zaman aşımı 7 saniye. Burada 1 saniye koydum, akış aynı.
 
 ## Hangi parça hangi dersten?
@@ -431,6 +566,26 @@ PX4 çalışmamdaki gerçek deneyde EKF2'nin GPS'i bırakması 7.9 saniye sürm�
 ## Bir adımda ne oluyor?
 
 0.152 s'deki adım, ilk "kullaniliyor" mesajının yazıldığı an:
+
+```mermaid
+sequenceDiagram
+    participant WQ as WorkQueue
+    participant GS as gps_sim
+    participant EK as ekf
+    participant T2 as estimator_topic
+    participant GM as gps_monitor
+    Note over WQ: saat 0.148 → 0.152 s
+    WQ->>GS: gerekirse_calistir()
+    Note right of GS: sıradaki zaman 0.250, çalışmaz
+    WQ->>EK: gerekirse_calistir()
+    EK->>EK: Run(): yeni GPS var (0.128 s), durum = kullaniliyor
+    EK->>T2: publish(EstimatorDurum)
+    T2->>GM: ScheduleNow() → _bekliyor = true
+    WQ->>GM: gerekirse_calistir()
+    GM->>GM: Run(): bekleniyor → kullaniliyor, ekrana yaz
+```
+
+Adım adım:
 
 1. Work queue saati 0.148'den 0.152'ye ilerletiyor ve sırayla üç modülün `gerekirse_calistir()` fonksiyonunu çağırıyor.
 2. **gps_sim**: bir sonraki çalışma zamanı 0.250, henüz gelmedi; hiçbir şey yapmıyor.
