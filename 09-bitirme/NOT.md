@@ -2,7 +2,7 @@
 
 İlk 8 derste öğrendiklerimi tek bir programda birleştirdim: PX4'ün çekirdek fikrinin düz C++ ile yazılmış oyuncak hali. İçinde bir work queue, `virtual Run()` ile çalışan modüller, template'li topic'ler, periyodik çalışan ve bir topic'e veri gelince uyanan modüller var. Bunlarla PX4 çalışmamdaki GPS kaybı deneyini küçük ölçekte yeniden yaptım.
 
-Bu derste C sürümü yok; her parçanın C karşılığı ilgili derste. Kod `mini_px4.cpp` dosyasında; her C++ satırının ne yaptığı yanında yorum olarak yazılı.
+Bu derste C sürümü yok; her parçanın C karşılığı ilgili derste. Kodun tamamı bu notun içinde (*Kod* bölümü); başka bir dosyaya bakmaya gerek yok. Her C++ satırının ne yaptığı yanında yorum olarak yazılı.
 
 ## Büyük resim
 
@@ -84,67 +84,13 @@ classDiagram
 - **virtual (6. ders):** `Run()` WorkItem'da `= 0`; her modül kendi `Run()`'ını yazmak zorunda. Work queue sadece `WorkItem*` tutuyor ama çağrı gerçek modüle gidiyor.
 - **template (7. ders):** `Topic<T>`, `Publication<T>`, `Subscription<T>` bir kez yazıldı; derleyici `GpsVeri` ve `EstimatorDurum` için ayrı ayrı üretti. Yanlış tipi yayınlamak derlenmiyor.
 
-## Kodu parça parça okumak
+## Kod
 
-Tamamı aşağıda *Kodun tamamı* bölümünde. Önce altı parçaya bakmak okumayı kolaylaştırıyor.
+Dosya: `mini_px4.cpp`. Kodun tamamı aşağıda, dokuz parçaya bölünmüş halde ve dosyadaki sırayla; parçalar art arda konunca dosyanın kendisi çıkıyor. Her C++ satırının ne yaptığı yanında yorum olarak yazılı.
 
-**1. Zaman (8. ders):** `125_ms` yazınca derleyici `operator ""_ms`'i çalıştırıp yerine 125000 koyuyor.
+### 1. Başlangıç ve zaman
 
-```cpp
-using zaman_us = uint64_t;                                          // typedef uint64_t zaman_us;
-constexpr zaman_us operator ""_ms(unsigned long long ms) { return ms * 1000; }
-```
-
-**2. WorkItem (1, 2, 5, 6. ders):** Her modülün temeli. Zamanı geldiyse veya uyandırıldıysa `Run()`'ı çağırıyor.
-
-```cpp
-class WorkItem {
-public:
-    WorkItem(const char *ad) : _ad(ad) {}     // constructor + initializer list
-    virtual void Run() = 0;                   // her modül kendi Run'ını yazmak zorunda
-    void ScheduleNow() { _bekliyor = true; }  // "beni bir sonraki adımda çalıştır"
-    // ...
-};
-```
-
-**3. Topic / Publication / Subscription (3, 7. ders):** Yayıncı ve okuyucu birbirini tanımıyor; ikisi de aynı topic'e referansla bağlı. Okuyucu, topic'in sayacı kendi okuduğundan farklıysa yeni veri olduğunu anlıyor.
-
-```cpp
-template<typename T>
-class Topic {
-    void yayinla(const T &v) { _veri = v; _sayac++; /* callback'li aboneleri ScheduleNow() ile uyandır */ }
-};
-bool update(T *hedef) { if (!updated()) return false; *hedef = _topic.veri(); _okunan = _topic.sayac(); return true; }
-```
-
-**4. WorkQueue:** Saati 4 ms ilerletip sıradaki her işe bakıyor.
-
-```cpp
-while (simdi < bitis) {
-    simdi += 4_ms;
-    for (int i = 0; i < _sayi; i++) { _isler[i]->gerekirse_calistir(); }
-}
-```
-
-**5. Modüller:** Constructor'da kendini zamanlıyor, `Run()`'da işini yapıyor.
-
-```cpp
-class Ekf : public WorkItem {
-    Ekf() : WorkItem("ekf") { ScheduleOnInterval(50_ms); }
-    void Run() override { /* yeni GPS varsa zamanı al, 1 s aşıldıysa Kayip, durumu yayınla */ }
-    static constexpr zaman_us GPS_ZAMAN_ASIMI = 1_s;
-};
-Subscription<EstimatorDurum> _durum_sub{estimator_topic, this};   // GpsMonitor: "yayın gelince beni uyandır"
-```
-
-**6. main:** Nesneleri oluşturuyor (constructor'lar çalışıyor), work queue'ya ekliyor, senaryoyu oynatıyor. `return 0` ile destructor'lar çalışıyor.
-
-## Kodun tamamı
-
-Dosya: `mini_px4.cpp`
-
-<details>
-<summary>Açmak için tıkla (yorumlu, 355 satır)</summary>
+Header'lar, `mini` namespace'i ve zaman tanımları. `125_ms` yazınca derleyici `operator ""_ms`'i çalıştırıp yerine 125000 koyuyor; programda bölme ya da çarpma kalmıyor (4, 8. ders).
 
 ```cpp
 // 9. ders, bitirme: PX4'ün çekirdek fikrinin oyuncak hali.
@@ -168,7 +114,13 @@ constexpr zaman_us operator ""_s(unsigned long long s)   { return s * 1000000; }
 } // namespace time_literals
 
 using namespace time_literals;   // bu namespace'teki isimleri burada önek yazmadan kullan (4_ms gibi)
+```
 
+### 2. WorkItem: her modülün temeli
+
+Bütün modüller bundan türüyor. Zamanlamayı (`ScheduleOnInterval`, `ScheduleNow`) burası yapıyor; `gerekirse_calistir()` zamanı geldiyse ya da uyandırıldıysa `Run()`'ı çağırıyor. `Run()` burada `= 0`: içi yok, her modül kendisi yazıyor (1, 2, 5, 6. ders).
+
+```cpp
 // ---------------- WorkItem (5. ders: kalıtım, 6. ders: virtual) ----------------
 class WorkItem                   // class: veri + o veri üzerinde çalışan fonksiyonlar tek pakette (C'de struct + fonksiyonlar)
 {
@@ -226,7 +178,13 @@ private:                         // private: yalnız bu class'ın kendi fonksiyo
     bool     _bekliyor{false};
     uint32_t _calisma_sayisi{0};
 };
+```
 
+### 3. Topic, Publication, Subscription
+
+Modüller arası veri yolu. Yayıncı ve okuyucu birbirini tanımıyor, ikisi de aynı topic'e referansla bağlı. Okuyucu, topic'in sayacı kendi en son okuduğundan farklıysa yeni veri olduğunu anlıyor. Callback'li abone varsa topic yayında onu `ScheduleNow()` ile uyandırıyor (3, 7. ders).
+
+```cpp
 // ---------------- Topic, Publication, Subscription (7. ders: template, 3. ders: referans) ----------------
 // template<typename T>: T yerine hangi tip verilirse (GpsVeri, EstimatorDurum ...) derleyici o tip için
 // class'ın bir kopyasını üretir. C'de her mesaj tipi için ayrı struct + fonksiyon yazmak ya da void* kullanmak gerekirdi.
@@ -304,7 +262,13 @@ private:
     Topic<T> &_topic;
     uint32_t  _okunan{0};
 };
+```
 
+### 4. WorkQueue
+
+Saati 4 ms ilerletip sıradaki her işin `gerekirse_calistir()`'ını çağırıyor. Sadece `WorkItem*` tutuyor; içindekinin GpsSim mi Ekf mi olduğunu bilmiyor.
+
+```cpp
 // ---------------- Work queue ----------------
 class WorkQueue
 {
@@ -341,7 +305,13 @@ private:
     WorkItem *_isler[8] {};
     int       _sayi{0};
 };
+```
 
+### 5. Mesajlar ve topic'ler
+
+Topic'lerde taşınan iki struct, GPS durumu için `enum class` ve iki global topic. `Topic<GpsVeri>` yazıldığı yerde derleyici template'ten o tipe özel class'ı üretiyor (7, 8. ders).
+
+```cpp
 // ---------------- Mesajlar (8. ders: enum class) ----------------
 struct GpsVeri {                 // C++'ta struct = varsayılanı public olan class; "struct GpsVeri" yazmadan GpsVeri kullanılır
     zaman_us zaman;
@@ -364,7 +334,13 @@ Topic<GpsVeri>        gps_topic;
 Topic<EstimatorDurum> estimator_topic;
 
 } // namespace mini
+```
 
+### 6. GpsSim modülü
+
+Constructor'da kendini 125 ms'ye zamanlıyor. `Run()` engelli değilse bir GPS verisi doldurup yayınlıyor. Destructor program biterken çalışıp ekrana yazıyor (2, 5, 6. ders).
+
+```cpp
 // ---------------- Modüller (1. ders: class, 2. ders: constructor/destructor) ----------------
 using namespace mini;                    // mini:: önekini yazmadan kullan
 using namespace mini::time_literals;     // 125_ms, 1_s yazımları için
@@ -406,7 +382,13 @@ private:
     Publication<GpsVeri> _gps_pub{gps_topic};   // üye nesne, {gps_topic} ile constructor'ına topic veriliyor
     bool _engelli{false};
 };
+```
 
+### 7. Ekf modülü
+
+Her 50 ms'de GPS topic'ine bakıyor. Yeni veri yoksa son GPS'in üzerinden geçen süreye göre durumu "kayıp" yapıyor ve her seferinde sonucu yayınlıyor. Aboneliğinde callback yok, yani GPS gelince uyanmıyor, kendi periyodunda bakıyor.
+
+```cpp
 // Tahminci: her 50 ms'de GPS'e bakıyor, 1 saniyedir yeni GPS yoksa "kayıp" diyor.
 class Ekf : public WorkItem
 {
@@ -440,7 +422,13 @@ private:
     Publication<EstimatorDurum> _durum_pub{estimator_topic};
     zaman_us                    _son_gps_zamani{0};
 };
+```
 
+### 8. GpsMonitor modülü
+
+Periyodik değil. Aboneliğe `this` verdiği için `estimator_topic`'e her yayında uyanıyor; durum değişmişse ekrana yazıyor.
+
+```cpp
 // GPS monitörü: periyodik değil; estimator her yayın yaptığında uyanıyor, durum değişince yazıyor.
 class GpsMonitor : public WorkItem
 {
@@ -472,7 +460,13 @@ private:
     Subscription<EstimatorDurum> _durum_sub{estimator_topic, this};   // callback: this
     GpsDurumu _onceki{GpsDurumu::Bekleniyor};
 };
+```
 
+### 9. main
+
+Nesneleri oluşturuyor (constructor'lar çalışıyor), work queue'ya ekliyor, senaryoyu oynatıyor: 2 s normal, 3 s GPS yok, 1 s GPS geri. `return 0` sonrası destructor'lar ters sırayla çalışıyor.
+
+```cpp
 int main()
 {
     // nesneler stack'te oluşuyor; burada constructor'lar çalışır, main bitince destructor'lar ters sırayla çalışır
@@ -503,8 +497,6 @@ int main()
     return 0;                    // buradan sonra monitor, ekf, gps destructor'ları çalışır → "gps_sim kapandi"
 }
 ```
-
-</details>
 
 ## Çıktı
 
